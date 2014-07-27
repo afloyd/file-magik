@@ -19,6 +19,7 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 		excludeFiles = opts.excludeFiles || [],
 		excludeDirectories = opts.excludeDirectories || [],
 		directoriesAreIncluded = opts.directoriesAreIncluded || false,
+		convertDashedNames = typeof opts.convertDashedNames !== 'undefined' ? opts.convertDashedNames : true,
 		getNames = opts.getNames || false,
 		results = [];
 	var files = fs.readdirSync(path.resolve(pathToSearch))
@@ -42,7 +43,7 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 			if (!getNames) {
 				results.push(filePath);
 			} else {
-				results.push({name: convertDashedName(fileName), path: filePath});
+				results.push({name: convertDashedNames ? convertDashedName(fileName) : fileName, path: filePath});
 			}
 		}
 	});
@@ -64,20 +65,61 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 	return results;
 };
 
+/**
+ * Maps file paths of the specified `opts.extension` (default == '.js') to an object (either `opts.exports` or empty
+ * object that is returned). If `opts.namespaceSubdirectories`
+ * is true `opts.recursive` is implied true. NamespaceSubdirectories will create a hierarchy respective to the
+ * directory/file path. Very useful for requiring a lib folder with commonly used modules to have them all available!
+ * @param opts
+ */
 exports.mapForExports = function mapForExports(opts) {
-	if (!opts.path || !opts.exports) { return console.error('path or exports not specified');}
-	opts.path = opts.path.replace(/(\/|\\)/gi, path.sep);
-	opts.path = path.resolve(opts.path);
-	opts.getNames = true;
+	prepareOpts(opts);
+	opts.exports = opts.exports || {};
+	var mapResult = exports.mapPathsToObject(opts) || {};
+	requireFiles(mapResult, opts.exportsOpts);
+	return mapResult;
+};
+
+function requireFiles(obj, exportsOpts) {
+	var libraryNames = Object.keys(obj);
+	for (var i= libraryNames.length;i--;) {
+		var name = libraryNames[i],
+			propertyValue = obj[name];
+
+		if (typeof propertyValue !== 'string') {//handle sub-object
+			requireFiles(propertyValue);
+			continue;
+		}
+
+		var fileExports = require(propertyValue);
+		if (!exportsOpts || (exportsOpts && typeof fileExports !== 'function')) {
+			obj[name] = fileExports;
+		} else {
+			obj[name] = fileExports(exportsOpts);
+		}
+	}
+	return obj;
+}
+
+/**
+ * Maps file paths of the specified `opts.extension` (default == '.js') to an object. If `opts.namespaceSubdirectories`
+ * is true `opts.recursive` is implied true. NamespaceSubdirectories will create a hierarchy respective to the
+ * directory/file path. Very useful for requiring a lib folder with commonly used modules to have them all available!
+ * @param opts
+ */
+exports.mapPathsToObject = function mapPathsToObject(opts) {
+	prepareOpts(opts);
+
 	var libraries = exports.get(opts.path, opts),
-		exportsOpts = opts.exportsOpts;
+		exportsOpts = opts.exportsOpts,
+		obj = opts.exports || {};
 
 	libraries.sort(function (a, b) {
 		if (a < b) return -1;
 		if (a === b) return 0;
 		return 1;
 	}).forEach(function (library) {
-		var namespace = opts.exports;
+		var namespace = obj;
 		if (opts.namespaceSubdirectories) {
 			var namespaces = library.path.substring(library.path.indexOf(opts.path) + opts.path.length + 1);
 			namespaces = namespaces.split(path.sep);
@@ -91,14 +133,31 @@ exports.mapForExports = function mapForExports(opts) {
 			});
 		}
 
-		var moduleExports = require(library.path);
-		if (!exportsOpts || (exportsOpts && typeof moduleExports !== 'function')) {
-			namespace[library.name] = moduleExports;
-		} else {
-			namespace[library.name] = require(library.path)(exportsOpts);
-		}
+		namespace[library.name] = library.path;
 	});
-};
+	return obj;
+}
+
+function prepareOpts(opts) {
+	if (!opts.path) {
+		throw new Error('path not specified');
+	}
+
+	opts.path = opts.path.replace(/(\/|\\)/gi, path.sep);
+	opts.path = path.resolve(opts.path);
+	opts.getNames = true;
+	opts.namespaceSubdirectories = opts.namespaceSubdirectories || false;
+	opts.exportsOpts = opts.exportsOpts || undefined;
+
+	if (opts.namespaceSubdirectories) {
+		opts.recursive = true; //implied recursion
+	}
+
+	if (opts.recursive && !opts.namespaceSubdirectories) {
+		console.warn('file-magik: For ', opts.path, ' recursive is true but namespaceSubdirectories is not. ' +
+			'Subdirectory files with same name will overwrite parents!');
+	}
+}
 
 function convertDashedName(name) {
 	var dashedIdxs = name.match(/-[a-z]/g),
