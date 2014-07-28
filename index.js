@@ -76,30 +76,34 @@ exports.mapForExports = function mapForExports(opts) {
 	prepareOpts(opts);
 	opts.exports = opts.exports || {};
 	var mapResult = exports.mapPathsToObject(opts) || {};
-	requireFiles(mapResult, opts.exportsOpts);
+	exports.requireFiles(mapResult, opts.exportsOpts);
 	return mapResult;
 };
 
-function requireFiles(obj, exportsOpts) {
+exports.requireFiles = function requireFiles(obj, fileOpts, recursive) {
+	recursive = typeof recursive !== 'undefined' ? recursive : true;
 	var libraryNames = Object.keys(obj);
 	for (var i= libraryNames.length;i--;) {
 		var name = libraryNames[i],
 			propertyValue = obj[name];
 
 		if (typeof propertyValue !== 'string') {//handle sub-object
-			requireFiles(propertyValue);
+			if (recursive) {
+				requireFiles(propertyValue);
+			}
+
 			continue;
 		}
 
 		var fileExports = require(propertyValue);
-		if (!exportsOpts || (exportsOpts && typeof fileExports !== 'function')) {
+		if (!fileOpts || (fileOpts && typeof fileExports !== 'function')) {
 			obj[name] = fileExports;
 		} else {
-			obj[name] = fileExports(exportsOpts);
+			obj[name] = fileExports(fileOpts);
 		}
 	}
 	return obj;
-}
+};
 
 /**
  * Maps file paths of the specified `opts.extension` (default == '.js') to an object. If `opts.namespaceSubdirectories`
@@ -136,7 +140,7 @@ exports.mapPathsToObject = function mapPathsToObject(opts) {
 		namespace[library.name] = library.path;
 	});
 	return obj;
-}
+};
 
 function prepareOpts(opts) {
 	if (!opts.path) {
