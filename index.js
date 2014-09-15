@@ -16,12 +16,13 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 	if (!pathToSearch) { return console.error('pathToSearch not specified'); }
 
 	var extension = opts.extension || '.js',
-		excludeFiles = opts.excludeFiles || [],
-		excludeDirectories = opts.excludeDirectories || [],
-		directoriesAreIncluded = opts.directoriesAreIncluded || false,
-		convertDashedNames = typeof opts.convertDashedNames !== 'undefined' ? opts.convertDashedNames : true,
-		getNames = opts.getNames || false,
-		results = [];
+	    regexMatchPatterns = opts.regexMatchPatterns || [],
+	    excludeFiles = opts.excludeFiles || [],
+	    excludeDirectories = opts.excludeDirectories || [],
+	    directoriesAreIncluded = opts.directoriesAreIncluded || false,
+	    convertDashedNames = typeof opts.convertDashedNames !== 'undefined' ? opts.convertDashedNames : true,
+	    getNames = opts.getNames || false,
+	    results = [];
 	var files = fs.readdirSync(path.resolve(pathToSearch))
 		.map(function (fileName) {
 			return path.resolve(pathToSearch, fileName);
@@ -29,15 +30,19 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 	files.forEach(function (filePath) {
 		var fileName = filePath.split(path.sep).pop();
 		fileName = fileName.substring(0, fileName.length - extension.length);
+		var regexMatches = regexMatchPatterns.filter(function (pattern) {
+			    return typeof pattern !== 'string' && filePath.match(pattern);
+		    }),
+		    regexMatch = regexMatchPatterns.length ? regexMatches.length : true;
 		var excludePatternMatch = excludeFiles.filter(function (pattern) {
 			return typeof pattern !== 'string' && filePath.match(pattern);
 		}).length > 0;
 
 		var isFile = fs.statSync(filePath).isFile(),
-			included = !excludePatternMatch &&											//not excluded regex pattern
-				excludeFiles.indexOf(fileName) === -1 && 								//not excluded file name
-				(filePath.substr(-1 * extension.length) === extension || !isFile) && 	//extension matches or is directory
-				(isFile || (directoriesAreIncluded && !isFile)); 						//is a file, or require directories flag true
+		    included = regexMatch && !excludePatternMatch &&						//not excluded regex pattern
+			excludeFiles.indexOf(fileName) === -1 && 								//not excluded file name
+			(filePath.substr(-1 * extension.length) === extension || !isFile) && 	//extension matches or is directory
+			(isFile || (directoriesAreIncluded && !isFile)); 						//is a file, or require directories flag true
 
 		if (included) {
 			if (!getNames) {
