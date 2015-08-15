@@ -1,5 +1,5 @@
 var fs = require('fs'),
-	path = require('path');
+    path = require('path');
 
 /**
  * Gets all file paths with the given extension. Can optionally do it recursively, and exclude named files and/or
@@ -15,7 +15,7 @@ var fs = require('fs'),
 exports.get = function getFilePaths (pathToSearch, opts) {
 	if (!pathToSearch) { return console.error('pathToSearch not specified'); }
 
-	var extension = opts.extension || '.js',
+	var extension = opts.extension === undefined ? '.js' : opts.extension,
 	    regexMatchPatterns = opts.regexMatchPatterns || [],
 	    excludeFiles = opts.excludeFiles || [],
 	    excludeDirectories = opts.excludeDirectories || [],
@@ -29,20 +29,25 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 		});
 	files.forEach(function (filePath) {
 		var fileName = filePath.split(path.sep).pop();
-		fileName = fileName.substring(0, fileName.length - extension.length);
+		fileName = fileName.substring(0, fileName.length - (extension ? extension.length : 0));
 		var regexMatches = regexMatchPatterns.filter(function (pattern) {
 			    return typeof pattern !== 'string' && filePath.match(pattern);
 		    }),
 		    regexMatch = regexMatchPatterns.length ? regexMatches.length : true;
 		var excludePatternMatch = excludeFiles.filter(function (pattern) {
-			return typeof pattern !== 'string' && filePath.match(pattern);
-		}).length > 0;
+				return typeof pattern !== 'string' && filePath.match(pattern);
+			}).length > 0;
 
 		var isFile = fs.statSync(filePath).isFile(),
-		    included = regexMatch && !excludePatternMatch &&						//not excluded regex pattern
-			excludeFiles.indexOf(fileName) === -1 && 								//not excluded file name
-			(filePath.substr(-1 * extension.length) === extension || !isFile) && 	//extension matches or is directory
-			(isFile || (directoriesAreIncluded && !isFile)); 						//is a file, or require directories flag true
+		    included =
+			    //not excluded regex pattern
+			    regexMatch && !excludePatternMatch &&
+				    //not excluded file name
+			    excludeFiles.indexOf(fileName) === -1 &&
+				    //have extension & matches, or is directory
+			    ((isFile && !extension) || (extension && filePath.substr(-1 * extension.length) === extension) || !isFile) &&
+				    //is a file, or require directories flag true
+			    (isFile || (directoriesAreIncluded && !isFile));
 
 		if (included) {
 			if (!getNames) {
@@ -58,8 +63,8 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 		}).forEach(function (directoryPath) {
 			var dirName = directoryPath.split(path.sep).pop();
 			var excludePatternMatched = excludeDirectories.filter(function (pattern) {
-				return typeof pattern !== 'string' && dirName.match(pattern);
-			}).length > 0;
+					return typeof pattern !== 'string' && dirName.match(pattern);
+				}).length > 0;
 			if (!excludePatternMatched && excludeDirectories.indexOf(dirName) === -1) {
 				var subDirJsFilePaths = getFilePaths(directoryPath, opts);
 				results = results.concat(subDirJsFilePaths);
@@ -90,7 +95,7 @@ exports.requireFiles = function requireFiles(obj, fileOpts, recursive) {
 	var libraryNames = Object.keys(obj);
 	for (var i= libraryNames.length;i--;) {
 		var name = libraryNames[i],
-			propertyValue = obj[name];
+		    propertyValue = obj[name];
 
 		if (typeof propertyValue !== 'string') {//handle sub-object
 			if (recursive) {
@@ -120,8 +125,8 @@ exports.mapPathsToObject = function mapPathsToObject(opts) {
 	prepareOpts(opts);
 
 	var libraries = exports.get(opts.path, opts),
-		exportsOpts = opts.exportsOpts,
-		obj = opts.exports || {};
+	    exportsOpts = opts.exportsOpts,
+	    obj = opts.exports || {};
 
 	libraries.sort(function (a, b) {
 		if (a < b) return -1;
@@ -170,7 +175,7 @@ function prepareOpts(opts) {
 
 function convertDashedName(name) {
 	var dashedIdxs = name.match(/-[a-z]/g),
-		camelCased = name;
+	    camelCased = name;
 
 	if (!dashedIdxs) {
 		return camelCased;
