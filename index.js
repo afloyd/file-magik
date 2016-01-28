@@ -99,7 +99,7 @@ exports.requireFiles = function requireFiles(obj, fileOpts, recursive) {
 
 		if (typeof propertyValue !== 'string') {//handle sub-object
 			if (recursive) {
-				requireFiles(propertyValue);
+				requireFiles(propertyValue, fileOpts, recursive);
 			}
 
 			continue;
