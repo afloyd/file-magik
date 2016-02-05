@@ -171,7 +171,8 @@ exports.mapPathsToObject = function mapPathsToObject(opts) {
 	prepareOpts(opts);
 
 	var libraries = exports.get(opts.path, opts),
-		obj = opts.exports || {};
+		obj = opts.exports || {},
+		convertDashedNames = typeof opts.convertDashedNames !== 'undefined' ? opts.convertDashedNames : true;;
 
 	libraries.sort(function (a, b) {
 		if (a < b) return -1;
@@ -185,6 +186,7 @@ exports.mapPathsToObject = function mapPathsToObject(opts) {
 			namespaces.pop(); //remove filename
 
 			namespaces.forEach(function (name) {
+				var name = convertDashedNames ? convertDashedName(name, opts) : name;
 				if (!namespace[name]) {
 					namespace[name] = {};
 				}
@@ -192,7 +194,7 @@ exports.mapPathsToObject = function mapPathsToObject(opts) {
 			});
 		}
 
-		namespace[library.name] = library.path;
+		namespace[library.name] = library.path; // library name dash converted in exports.get
 	});
 	return obj;
 };
