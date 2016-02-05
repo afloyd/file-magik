@@ -87,42 +87,79 @@ exports.mapForExports = function mapForExports(opts) {
 	prepareOpts(opts);
 	opts.exports = opts.exports || {};
 	var mapResult = exports.mapPathsToObject(opts) || {};
-	exports.requireFiles(mapResult, opts.exportsOpts, opts);
+	exports.requireFiles(mapResult, opts);
 	return mapResult;
 };
 
-exports.requireFiles = function requireFiles(obj, exportsOpts, opts) {
-	var recursive = typeof opts.recursive !== 'undefined' ? opts.recursive : true,
-		requireSiblingsBeforeRecursion = !!opts.requireSiblingsBeforeRecursion;
+exports.requireFiles = function requireFiles(obj, opts) {
+	var exportsOpts = opts.exportsOpts,
+		recursive = typeof opts.recursive !== 'undefined' ? opts.recursive : true,
+		requireSiblingsBeforeRecursion = !!opts.requireSiblingsBeforeRecursion,
+		requireOpts = opts.requireOpts;
 
 	var libraryNames = Object.keys(obj),
-		recursionObjs = [];
+		recursionObjs = [],
+		lastRequires = [],
+		lastRecursionObjs = [];
 	for (var i= libraryNames.length; i--;) {
 		var name = libraryNames[i],
-			propertyValue = obj[name];
+			propertyValue = obj[name],
+			pushToLast = requireOpts &&
+				name[0] === requireOpts.prefix &&
+				name[0] === requireOpts.prefix && requireOpts.requireLast;
 
 		if (typeof propertyValue !== 'string') {// handle sub-object
 			// push off recursion until after immediate siblings are resolved
-			if (requireSiblingsBeforeRecursion) recursionObjs.push(propertyValue);
-			else requireFiles(propertyValue, exportsOpts, opts); // order doesn't matter, handle recursion now
+			if (requireSiblingsBeforeRecursion) {
+				if (!pushToLast) recursionObjs.push(propertyValue); // not a last require match, but siblings come first
+				else lastRecursionObjs.push(propertyValue); // must require siblings & other objects before this one
+			}
+			else {
+				if (!pushToLast) requireFiles(propertyValue, opts); // sibling order doesn't matter, and not last require match
+				else lastRecursionObjs.push(propertyValue); // last require match, must require other sibling objects first
+			}
 			continue;
 		}
 
-		var fileExports = require(propertyValue);
-		if (!exportsOpts || (exportsOpts && typeof fileExports !== 'function')) {
-			obj[name] = fileExports;
-		} else {
-			obj[name] = fileExports(exportsOpts);
-		}
+		if (!pushToLast) requireFile(obj, name, propertyValue, opts);
+		else lastRequires.push({
+			name: name,
+			path: propertyValue
+		});
 	}
-	for(var rpIdx = recursionObjs.length; rpIdx--;) {
-		if (!recursive) continue;
 
-		requireFiles(recursionObjs[rpIdx], exportsOpts, opts);
+	recurseObjs(recursionObjs, opts);
+
+	// Always require immediate siblings first
+	for(var lrIdx = lastRequires.length; lrIdx--;) {
+		if (!recursive) continue;
+		var lastRequireValues = lastRequires[lrIdx];
+		requireFile(obj, lastRequireValues.name, lastRequireValues.path, opts);
 	}
+
+	// Start recursion into last objects
+	recurseObjs(lastRecursionObjs, opts);
 
 	return obj;
 };
+
+function recurseObjs(objs, opts) {
+	var recursive = typeof opts.recursive !== 'undefined' ? opts.recursive : true;
+	for(var oIdx = objs.length; oIdx--;) {
+		if (!recursive) continue;
+
+		exports.requireFiles(objs[oIdx], opts);
+	}
+}
+
+function requireFile(o, name, path, opts) {
+	var fileExports = require(path);
+	if (!opts.exportsOpts || (opts.exportsOpts && typeof fileExports !== 'function')) {
+		o[name] = fileExports;
+	} else {
+		o[name] = fileExports(opts.exportsOpts);
+	}
+}
 
 /**
  * Maps file paths of the specified `opts.extension` (default == '.js') to an object. If `opts.namespaceSubdirectories`

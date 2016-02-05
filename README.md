@@ -15,6 +15,10 @@ require('file-magik').mapForExports(
 		convertDashedNames: true,     				// Convert dashed file names into camelCase on `exports` object (my-file.js become exports.myFile)
 		namespaceSubdirectories : true,				// Create a hierarchy files in `exports` object
 		requireSiblingsBeforeRecursion: true,		// Require siblings in object before further recursion
+		requireOpts: {								// Only require files/folders with given prefix after others in same folder are required
+			prefix: '$',		
+			requireLast: true
+		}
 		exports : moduleExports,					// [optional] The object to store the results on. If empty a new object is created and returned
 		exportsOpts : {app: app} 					// If the module is exporting a function, `exportOpts`  will be passed into the function and the result 
 								 					// 		will be stored on the `exports` object 
