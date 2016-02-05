@@ -7,12 +7,17 @@ contained files into an object you choose
 ```
 require('file-magik').mapForExports(
 	{
-		path : './routes',
-		recursive : true,
-		excludeFiles : [/index\.js/],
-		namespaceSubdirectories : true,
-		exports : moduleExports,
-		exportsOpts : app
+		path : './routes',							// Path to map
+		extension: '.js',							// Extension of files to include. Pass `null` to include all extensions
+		recursive : true,							// Whether to recurse into folders of `path`
+		excludeDirectories: [],       				// Either specific full path strings to match, or regex patterns
+		excludeFiles : [/index\.js/, /-tests.js$/], // Either specific full path strings to match, or regex patterns
+		convertDashedNames: true,     				// Convert dashed file names into camelCase on `exports` object (my-file.js become exports.myFile)
+		namespaceSubdirectories : true,				// Create a hierarchy files in `exports` object
+		requireSiblingsBeforeRecursion: true,		// Require siblings in object before further recursion
+		exports : moduleExports,					// [optional] The object to store the results on. If empty a new object is created and returned
+		exportsOpts : {app: app} 					// If the module is exporting a function, `exportOpts`  will be passed into the function and the result 
+								 					// 		will be stored on the `exports` object 
 	});
 ```
 
@@ -23,7 +28,7 @@ More documentation to come...
 
 (The MIT License)
 
-Copyright &copy; 2014 Austin Floyd &lt;texsc98@gmail.com&gt;
+Copyright &copy; 2014-2016 Austin Floyd &lt;texsc98@gmail.com&gt;
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
