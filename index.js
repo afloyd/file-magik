@@ -84,8 +84,10 @@ exports.get = function getFilePaths (pathToSearch, opts) {
  * @param opts
  */
 exports.mapForExports = function mapForExports(opts) {
-	prepareOpts(opts);
 	opts.exports = opts.exports || {};
+	prepareOpts(opts);
+	opts.useNewWithExports = opts.useNewWithExports || false;
+
 	var mapResult = exports.mapPathsToObject(opts) || {};
 	exports.requireFiles(mapResult, opts);
 	return mapResult;
@@ -154,10 +156,10 @@ function recurseObjs(objs, opts) {
 
 function requireFile(o, name, path, opts) {
 	var fileExports = require(path);
-	if (!opts.exportsOpts || (opts.exportsOpts && typeof fileExports !== 'function')) {
+	if (typeof fileExports !== 'function' || !opts.exportsOpts) {
 		o[name] = fileExports;
 	} else {
-		o[name] = fileExports(opts.exportsOpts);
+		o[name] = opts.useNewWithExports ? new fileExports(opts.exportsOpts) : fileExports(opts.exportsOpts);
 	}
 }
 
