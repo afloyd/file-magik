@@ -1,4 +1,4 @@
-file-magik
+file-magik [![npm version](https://badge.fury.io/js/file-magik.svg)](https://badge.fury.io/js/file-magik)
 ===============
 
 An extremely useful function that can recursively look through a given directory structure and require/map all the
