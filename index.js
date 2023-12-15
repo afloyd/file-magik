@@ -1,6 +1,33 @@
 'use strict';
-var fs = require('fs'),
-	path = require('path');
+const fs = require('fs'),
+	path = require('path'),
+	debug = require('debug'),
+	pkg = require('./package.json');
+
+const cwd = process.cwd();
+const cwdLength = cwd.length;
+const pkgName = pkg?.name || 'file-magik';
+const logLevels = ['debug', 'info', 'warn', 'error', 'critital'];
+
+const getDebug = ({level = 'debug', filePath, relFilePath, suffix} = {level: 'debug'})=> {
+	if (!relFilePath && filePath) {
+		relFilePath = filePath.substring(cwdLength);
+	}
+	// let debugLog = debug(`${pkgName}:${relFilePath || '?'}:${suffix || '?'}:${level}`);
+	let debugObj = {};
+	logLevels.forEach((level) => {
+		debugObj[level] = (...rest) => {
+			const logLevelPrefix = `${level}:`;
+			const debugLogger = debug(`${pkgName}:${logLevelPrefix}:${relFilePath || '?'}:${suffix || '?'}`);
+
+			// Prefix all logging with date
+			debugLogger(new Date().toISOString() + ` -- ${logLevelPrefix}`, ...rest);
+		};
+	});
+
+	return debugObj;
+};
+const pkgDebugLogger = getDebug();
 
 /**
  * Gets all file paths with the given extension. Can optionally do it recursively, and exclude named files and/or
@@ -14,7 +41,11 @@ var fs = require('fs'),
  * @return {*}
  */
 exports.get = function getFilePaths (pathToSearch, opts) {
-	if (!pathToSearch) { return console.error('pathToSearch not specified'); }
+	const debugLogger = getDebug({ filePath: pathToSearch });
+	debugLogger.debug('get init');
+	if (!pathToSearch) {
+		return debugLogger.error('pathToSearch not specified');
+	}
 
 	var extension = opts.extension === undefined ? '.js' : opts.extension,
 		regexMatchPatterns = opts.regexMatchPatterns || [],
@@ -28,6 +59,7 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 		.map(function (fileName) {
 			return path.resolve(pathToSearch, fileName);
 		});
+	debugLogger.debug(`files found:${files.length}`);
 	files.forEach(function (filePath) {
 		var fileName = filePath.split(path.sep).pop();
 		fileName = fileName.substring(0, fileName.length - (extension ? extension.length : 0));
@@ -56,19 +88,36 @@ exports.get = function getFilePaths (pathToSearch, opts) {
 			} else {
 				results.push({name: convertDashedNames ? convertDashedName(fileName) : fileName, path: filePath});
 			}
+		} else {
+			debugLogger.debug(`${filePath} not included based on configured opts`);
 		}
 	});
+	debugLogger.info(`opts.recursive:${opts.recursive}`);
 	if (!!opts.recursive) {
 		files.filter(function (directoryPath) {
-			return fs.statSync(directoryPath).isDirectory();
+			const isDirectory = fs.statSync(directoryPath).isDirectory();
+			if (isDirectory) {
+				const debugLogger = getDebug({ filePath: directoryPath });
+				debugLogger.debug(`isDirectory:${isDirectory}`);
+			}
+			return isDirectory;
 		}).forEach(function (directoryPath) {
-			var dirName = directoryPath.split(path.sep).pop();
-			var excludePatternMatched = excludeDirectories.filter(function (pattern) {
-					return typeof pattern !== 'string' && dirName.match(pattern);
+			const debugLogger = getDebug({ filePath: directoryPath });
+
+			var dirName = directoryPath.split(path.sep) .pop();
+			var excludePatternMatched = excludeDirectories.filter((pattern) => {
+					const isMatch = typeof pattern !== 'string' && dirName.match(pattern);
+					if (isMatch) {
+						debugLogger.debug(`${dirName} matches excluded directory pattern`);
+					}
+					return isMatch;
 				}).length > 0;
 			if (!excludePatternMatched && excludeDirectories.indexOf(dirName) === -1) {
 				var subDirJsFilePaths = getFilePaths(directoryPath, opts);
 				results = results.concat(subDirJsFilePaths);
+				debugLogger.debug(`subDirJsFilePaths length:${results.length}`);
+			} else {
+				debugLogger.debug(`${dirName} excluded due to configured opts`);
 			}
 		});
 	}
@@ -84,6 +133,9 @@ exports.get = function getFilePaths (pathToSearch, opts) {
  * @param opts
  */
 exports.mapForExports = function mapForExports(opts) {
+	const debugLogger = getDebug({ filePath: opts.path });
+	debugLogger.debug('mapForExports init');
+
 	opts.exports = opts.exports || {};
 	prepareOpts(opts);
 	opts.useNewWithExports = opts.useNewWithExports || false;
@@ -94,6 +146,9 @@ exports.mapForExports = function mapForExports(opts) {
 };
 
 exports.requireFiles = function requireFiles(obj, opts) {
+	const debugLogger = getDebug({ filePath: opts.path });
+	debugLogger.debug('requireFiles init');
+
 	var exportsOpts = opts.exportsOpts,
 		recursive = typeof opts.recursive !== 'undefined' ? opts.recursive : true,
 		requireSiblingsBeforeRecursion = !!opts.requireSiblingsBeforeRecursion,
@@ -155,6 +210,9 @@ function recurseObjs(objs, opts) {
 }
 
 function requireFile(o, name, path, opts) {
+	const debugLogger = getDebug({ filePath: path });
+	debugLogger.debug('requireFile');
+
 	var fileExports = require(path);
 	if (typeof fileExports !== 'function' || !opts.exportsOpts) {
 		o[name] = fileExports;
@@ -170,11 +228,13 @@ function requireFile(o, name, path, opts) {
  * @param opts
  */
 exports.mapPathsToObject = function mapPathsToObject(opts) {
+	const debugLogger = getDebug({ filePath: opts.path });
+	debugLogger.debug('mapPathsToObject init');
 	prepareOpts(opts);
 
 	var libraries = exports.get(opts.path, opts),
 		obj = opts.exports || {},
-		convertDashedNames = typeof opts.convertDashedNames !== 'undefined' ? opts.convertDashedNames : true;;
+		convertDashedNames = typeof opts.convertDashedNames !== 'undefined' ? opts.convertDashedNames : true;
 
 	libraries.sort(function (a, b) {
 		if (a < b) return -1;
@@ -202,6 +262,8 @@ exports.mapPathsToObject = function mapPathsToObject(opts) {
 };
 
 function prepareOpts(opts) {
+	const debugLogger = getDebug({ filePath: opts.path });
+	debugLogger.debug('prepareOpts init');
 	if (!opts.path) {
 		throw new Error('path not specified');
 	}
@@ -214,10 +276,11 @@ function prepareOpts(opts) {
 
 	if (opts.namespaceSubdirectories) {
 		opts.recursive = true; //implied recursion
+		debugLogger.debug(`opts.namespaceSubdirectories:${opts.namespaceSubdirectories} forcing implied recursion. opts.recursive:${opts.recursive}`);
 	}
 
 	if (opts.recursive && !opts.namespaceSubdirectories) {
-		console.warn('file-magik: For ', opts.path, ' recursive is true but namespaceSubdirectories is not. ' +
+		debugLogger.warn('file-magik: For ', opts.path, ' recursive is true but namespaceSubdirectories is not. ' +
 			'Subdirectory files with same name will overwrite parents!');
 	}
 }
